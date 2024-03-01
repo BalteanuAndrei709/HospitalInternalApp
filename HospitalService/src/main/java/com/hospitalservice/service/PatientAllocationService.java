@@ -153,6 +153,7 @@ public class PatientAllocationService {
                     .respiratoryProblems(patientDetails.isRespiratoryProblems())
                     .visionProblems(patientDetails.isVisionProblems())
                     .dateOfBirth(patientDetails.getDateOfBirth())
+                    .socialNumber(patientDetails.getSocialNumber())
                     .build();
 
             patient = patientRepository.save(patient);

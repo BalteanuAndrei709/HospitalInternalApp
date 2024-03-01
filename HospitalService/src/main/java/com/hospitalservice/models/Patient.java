@@ -1,9 +1,6 @@
 package com.hospitalservice.models;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -31,6 +28,9 @@ public class Patient {
     private String dateOfBirth;
 
     private String sex;
+
+    @Column(unique = true)
+    private String socialNumber;
 
     private boolean respiratoryProblems;
 
