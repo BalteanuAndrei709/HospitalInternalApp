@@ -119,7 +119,7 @@ Based on the given data at registration (the date of birth, the county and serie
 
 The response of both checks is send back to the Register Service.
 
-#### Hospital Service
+### Hospital Service
 
 This service tries to allocate a saloon to the patient. The allocated saloon will need to have as less facilities possible, but metting the patient special needs (respiratori, mobility or vision problems). If there is any available saloon, the number of it will be send back to the Register Service.
   
