@@ -43,7 +43,7 @@ The flow for registering tha patient looks like:
 
 </picture>
 
-Each registration attempt is stored into a database. The "success" status is by default false, until it's changed in case of successfully registration (if it's the case).
+Each registration attempt is stored into a database. The "success" status is by default false, until it's changed in case of successfully registration (if it's the case). If all checks are passed, the request returns the saloon number in which the patient will be treated.
 <picture>
 
 ![image](https://github.com/BalteanuAndrei709/HospitalInternalApp/assets/79245195/d9cbd3d2-69b6-4f94-954b-1767e8323c53)
@@ -83,7 +83,7 @@ For this, this service communicates with a service that stores each county, allo
 
 <picture>
 
-![image](https://github.com/BalteanuAndrei709/HospitalInternalApp/assets/79245195/5e133898-2659-4e4c-851c-d242483e8385)
+![image](https://github.com/BalteanuAndrei709/HospitalInternalApp/assets/79245195/a06967e8-f4e5-4fa4-a1a3-a7027ca9cfb4)
 
 </picture>
 
@@ -95,3 +95,38 @@ The romanian social number is composed from multiple parts.
 ![image](https://github.com/BalteanuAndrei709/HospitalInternalApp/assets/79245195/da79c26f-07f2-4bd2-a6dd-dd026ebe804a)
 
 </picture>
+
+1. S component: this component is calculated based on the patient gender and year of birth. It has 8 possible values:
+  - *1*: male gender and year birth between 1900 - 1999
+  - *2*: female gender and year birth between 1900 - 1999
+  - *3*: male gender and year birth between 1800 - 1899
+  - *4*: female gender and year birth between 1800 - 1899
+  - *5*: male gender and year birth between  2000 - 2099
+  - *6*: female gender and year birth between 2000 - 2099
+  - *7*: male gender for resident persons (persoane residente)
+  - *8*: female gender for resident persons (persoane residente)
+
+2. AA component: last 2 digits of the year of birth.
+3. LL component: the month when the citisen was born, with values between 01 and 12.
+4. ZZ component: day of birth, with values between 01 and 31.
+5. JJ component: it represent the county code where the citisen was porn. A complete list:
+6. NNN component: a random number between 001 and 999.
+7. C component: a random digit.
+
+More information can be found on : https://ro.wikipedia.org/wiki/Cod_numeric_personal_(Rom%C3%A2nia)
+
+Based on the given data at registration (the date of birth, the county and series in which the citisen was born, the gender), we can check if the social number is valid. 
+
+The response of both checks is send back to the Register Service.
+
+#### Hospital Service
+
+This service tries to allocate a saloon to the patient. The allocated saloon will need to have as less facilities possible, but metting the patient special needs (respiratori, mobility or vision problems). If there is any available saloon, the number of it will be send back to the Register Service.
+  
+<picture>
+
+![image](https://github.com/BalteanuAndrei709/HospitalInternalApp/assets/79245195/3794031f-2033-4286-b7a9-fa9729ea3698)
+
+</picture>
+
+
