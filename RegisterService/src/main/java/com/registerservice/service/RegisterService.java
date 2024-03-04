@@ -3,11 +3,12 @@ package com.registerservice.service;
 import com.google.gson.Gson;
 import com.registerservice.kafka.producer.PatientDetailsCheckerProducer;
 import com.registerservice.kafka.producer.PatientInsuranceCheckerProducer;
-import com.registerservice.kafka.producer.PatientPersistProducer;
+import com.registerservice.kafka.producer.AllocateSaloonCheckerProducer;
 import com.registerservice.model.RegistrationAttempt;
 import com.registerservice.model.dto.PatientIdentityCardDetailsDTO;
 import com.registerservice.model.dto.RegisterPatientDTO;
 import com.registerservice.repository.RegistrationAttemptRepository;
+import com.registerservice.utils.IdentityCardValidationStatusMap;
 import com.registerservice.utils.InsuranceValidationStatusMap;
 import com.registerservice.utils.SaloonNumberAllocatedStatusMap;
 import org.slf4j.Logger;
@@ -21,29 +22,14 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
-
-import com.registerservice.utils.IdentityCardValidationStatusMap;
 @Service
 public class RegisterService {
-
-
-    @Value("${kafka.topic.patient.details.checker}")
-    private String patientIdentityCardCheckerTopic;
-
-    @Value("${kafka.topic.patient.insurance.checker}")
-    private String patientInsuranceCheckerTopic;
-
-    @Value("${kafka.topic.allocate.saloon}")
-    private String allocateSaloonTopic;
     
     private final PatientDetailsCheckerProducer patientDetailsCheckerProducer;
 
     private final PatientInsuranceCheckerProducer patientInsuranceCheckerProducer;
 
-    private final PatientPersistProducer patientPersistProducer;
+    private final AllocateSaloonCheckerProducer allocateSaloonCheckerProducer;
 
     private final RegistrationAttemptRepository registrationAttemptRepository;
 
@@ -53,7 +39,6 @@ public class RegisterService {
 
     private final SaloonNumberAllocatedStatusMap saloonNumberAllocatedStatusMap;
 
-
     private final Gson gson;
 
     private static final Logger log = LoggerFactory.getLogger(RegisterService.class);
@@ -61,7 +46,7 @@ public class RegisterService {
     @Autowired
     public RegisterService(PatientDetailsCheckerProducer patientDetailsCheckerProducer,
                            PatientInsuranceCheckerProducer patientInsuranceCheckerProducer,
-                           PatientPersistProducer patientPersistProducer,
+                           AllocateSaloonCheckerProducer allocateSaloonCheckerProducer,
                            RegistrationAttemptRepository registrationAttemptRepository,
                            Gson gson,
                            IdentityCardValidationStatusMap identityCardValidationStatusMap,
@@ -69,7 +54,7 @@ public class RegisterService {
                            SaloonNumberAllocatedStatusMap saloonNumberAllocatedStatusMap){
         this.patientDetailsCheckerProducer = patientDetailsCheckerProducer;
         this.patientInsuranceCheckerProducer = patientInsuranceCheckerProducer;
-        this.patientPersistProducer = patientPersistProducer;
+        this.allocateSaloonCheckerProducer = allocateSaloonCheckerProducer;
         this.registrationAttemptRepository = registrationAttemptRepository;
         this.gson = gson;
         this.identityCardValidationStatusMap = identityCardValidationStatusMap;
@@ -77,8 +62,12 @@ public class RegisterService {
         this.saloonNumberAllocatedStatusMap = saloonNumberAllocatedStatusMap;
     }
 
+    /*
+     Method responsible for registering the patient.
+     */
     public Integer registerPatient(RegisterPatientDTO registerPatientDTO) {
 
+        // extract the patient identity card details from the request input
         PatientIdentityCardDetailsDTO patientIdentityCardDetailsDTO = extractIdentityCardDetails(registerPatientDTO);
 
         // save the registration attempt
@@ -89,50 +78,61 @@ public class RegisterService {
                             .id(identifier)
                             .build());
 
-        // check the patient identity card details
-        boolean validPatientDetails = checkPatientDetails(patientIdentityCardDetailsDTO,identifier);
+        try {
 
-        if(!validPatientDetails){
+            // Initiate both checks asynchronously
+            CompletableFuture<Boolean> validPatientDetailsFuture = checkPatientDetails(
+                    patientIdentityCardDetailsDTO,
+                    identifier);
+            CompletableFuture<Boolean> patientHasInsuranceFuture = checkPatientInsurance(
+                    patientIdentityCardDetailsDTO.getSocialNumber(),
+                    identifier);
+            CompletableFuture<Integer> allocatedSaloonFuture = allocateSaloon(registerPatientDTO, identifier);
+
+            CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(
+                    validPatientDetailsFuture,
+                    patientHasInsuranceFuture);
+
+            combinedFuture.get();
+
+            // Now that all three futures have completed, check their results
+            boolean validPatientDetails = validPatientDetailsFuture.get();
+            boolean patientHasInsurance = patientHasInsuranceFuture.get();
+
+
+            // in case of a failed checks or no available saloon, return -1
+            if (!validPatientDetails || !patientHasInsurance) {
+                return -1;
+            }
+
+            int allocatedSaloon = allocatedSaloonFuture.get();
+
+            if(allocatedSaloon == -1){
+                return -1;
+            }
+
+            // checks pass
+            registrationAttempt.setSuccess(true);
+            registrationAttemptRepository.save(registrationAttempt);
+
+            return allocatedSaloon;
+
+        } catch (InterruptedException | ExecutionException e) {
+            log.error(e.getMessage());
             return -1;
         }
-
-        // check the patient has a medical insurance
-         boolean patientHasInsurance = checkPatientInsurance(patientIdentityCardDetailsDTO.getSocialNumber(), identifier);
-
-        if(!patientHasInsurance){
-            return -1;
-        }
-
-
-        registrationAttempt.setSuccess(true);
-        registrationAttemptRepository.save(registrationAttempt);
-
-        return allocateSaloon(registerPatientDTO, identifier);
     }
 
-    private Integer allocateSaloon(RegisterPatientDTO registerPatientDTO, UUID identifier) {
+
+    private CompletableFuture<Integer> allocateSaloon(RegisterPatientDTO registerPatientDTO, UUID identifier) {
+
+        CompletableFuture<Integer> futureResult =  saloonNumberAllocatedStatusMap.getOrCreateFuture(identifier);
 
         String message = createPersistPatientMessage(registerPatientDTO, identifier);
-        patientPersistProducer.sendMessage(allocateSaloonTopic, message);
 
-        return waitForSaloonNumber(identifier);
-    }
+        allocateSaloonCheckerProducer.sendMessage(message);
 
-    private Integer waitForSaloonNumber(UUID identifier) {
-
-        CompletableFuture<Integer> future = saloonNumberAllocatedStatusMap.getOrCreateFuture(identifier);
-
-        try {
-            // Wait for the future to complete with a timeout
-            return future.get(10, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while waiting for validation", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("Exception occurred during validation", e);
-        } catch (TimeoutException e) {
-            throw new RuntimeException("Validation timed out", e);
-        }
+        return futureResult;
     }
 
     private String createPersistPatientMessage(RegisterPatientDTO registerPatientDTO, UUID identifier) {
@@ -145,30 +145,15 @@ public class RegisterService {
         return gson.toJson(message);
     }
 
-    private boolean checkPatientInsurance(String socialNumber, UUID identifier) {
+    private CompletableFuture<Boolean> checkPatientInsurance(String socialNumber, UUID identifier) {
+
+        CompletableFuture<Boolean> futureResult = insuranceValidationStatusMap.getOrCreateFuture(identifier);
 
         String message = createInsuranceCheckMessage(identifier,socialNumber);
-        log.info("Checking the insurance for patient with these details : " + message);
-        patientInsuranceCheckerProducer.sendMessage(patientInsuranceCheckerTopic, message);
 
-        return waitForInsuranceValidationResult(identifier);
-    }
+        patientInsuranceCheckerProducer.sendMessage(message);
 
-    private boolean waitForInsuranceValidationResult(UUID identifier) {
-
-        CompletableFuture<Boolean> future = insuranceValidationStatusMap.getOrCreateFuture(identifier);
-
-        try {
-            // Wait for the future to complete with a timeout
-            return future.get(10, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while waiting for validation", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("Exception occurred during validation", e);
-        } catch (TimeoutException e) {
-            throw new RuntimeException("Validation timed out", e);
-        }
+        return futureResult;
     }
 
     private String createInsuranceCheckMessage(UUID identifier, String socialNumber) {
@@ -193,13 +178,15 @@ public class RegisterService {
                 .build();
     }
 
-    private boolean checkPatientDetails(PatientIdentityCardDetailsDTO patientIdentityCardDetailsDTO, UUID identifier) {
+    private CompletableFuture<Boolean> checkPatientDetails(PatientIdentityCardDetailsDTO patientIdentityCardDetailsDTO, UUID identifier){
+
+        CompletableFuture<Boolean> futureResult = identityCardValidationStatusMap.getOrCreateFuture(identifier);
 
         String message = createIdentityCardCheckMessage(identifier, patientIdentityCardDetailsDTO);
-        log.info(message);
-        patientDetailsCheckerProducer.sendMessage(patientIdentityCardCheckerTopic, message);
 
-        return waitForIdentityCardValidationResult(identifier);
+        patientDetailsCheckerProducer.sendMessage(message);
+
+        return futureResult;
     }
 
     private String createIdentityCardCheckMessage(UUID identifier, PatientIdentityCardDetailsDTO patientIdentityCardDetailsDTO) {
@@ -220,23 +207,6 @@ public class RegisterService {
             if(!registrationAttemptRepository.existsById(randomUUID)){
                 return randomUUID;
             }
-        }
-    }
-
-    private boolean waitForIdentityCardValidationResult(UUID identifier) {
-
-        CompletableFuture<Boolean> future = identityCardValidationStatusMap.getOrCreateFuture(identifier);
-
-        try {
-            // Wait for the future to complete with a timeout
-            return future.get(10, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while waiting for validation", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("Exception occurred during validation", e);
-        } catch (TimeoutException e) {
-            throw new RuntimeException("Validation timed out", e);
         }
     }
 }

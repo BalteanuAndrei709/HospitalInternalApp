@@ -21,8 +21,10 @@ public class RegisterController {
         this.registerService = registerService;
     }
 
-
-
+    /*
+     API responsible for registration of a patient.
+     Returns the allocated saloon number, -1 in case of error or no available saloon.
+     */
     @PostMapping
     public ResponseEntity<?> registerPatient(@RequestBody RegisterPatientDTO patientDetails){
 

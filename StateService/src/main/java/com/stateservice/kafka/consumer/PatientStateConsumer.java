@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class PatientStateConsumer {
 
-    private static final Logger log = LoggerFactory.getLogger(EnvironmentStateConsumer.class);
+    private static final Logger log = LoggerFactory.getLogger(PatientStateConsumer.class);
 
     private final StateService stateService;
 

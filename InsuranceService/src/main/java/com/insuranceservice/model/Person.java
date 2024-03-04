@@ -16,10 +16,6 @@ import java.util.UUID;
 public class Person {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private UUID id;
-
-    @Column(unique = true)
     private String socialNumber;
 
     private Boolean  insured;

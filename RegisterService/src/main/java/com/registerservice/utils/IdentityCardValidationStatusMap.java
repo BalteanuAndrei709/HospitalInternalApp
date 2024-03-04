@@ -11,8 +11,8 @@ public final class IdentityCardValidationStatusMap {
 
     private final ConcurrentHashMap<UUID, CompletableFuture<Boolean>> validationsStatus = new ConcurrentHashMap<>();
 
-    public CompletableFuture<Boolean> getOrCreateFuture(UUID patientDetailsId) {
-        return validationsStatus.computeIfAbsent(patientDetailsId, k -> new CompletableFuture<>());
+    public CompletableFuture<Boolean> getOrCreateFuture(UUID identifier) {
+        return validationsStatus.computeIfAbsent(identifier, k -> new CompletableFuture<>());
     }
 
     public void completeFuture(UUID patientDetailsId, boolean isValid) {

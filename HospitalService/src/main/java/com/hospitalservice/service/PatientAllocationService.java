@@ -28,9 +28,6 @@ public class PatientAllocationService {
 
     private final AllocatedSaloonProducer allocatedSaloonProducer;
 
-    @Value("${kafka.topic.allocate.saloon.response}")
-    private String responseTopic;
-
     @Autowired
     public PatientAllocationService(Gson gson,
                                     PatientRepository patientRepository,
@@ -114,7 +111,7 @@ public class PatientAllocationService {
 
     private void sendAllocatedSaloon(String message) {
 
-        allocatedSaloonProducer.sendMessage(responseTopic, message);
+        allocatedSaloonProducer.sendMessage(message);
     }
 
     private String createSuccessMessage(Integer saloonNumber, UUID identifier) {

@@ -1,7 +1,7 @@
 package com.insuranceservice.service;
 
 import com.google.gson.Gson;
-import com.insuranceservice.kafka.producer.CheckerResponseProducer;
+import com.insuranceservice.kafka.producer.PatientInsuranceCheckResponse;
 import com.insuranceservice.model.dto.ValidationResponseDTO;
 import com.insuranceservice.model.dto.InsuranceDetailsDTO;
 import com.insuranceservice.repository.PersonRepository;
@@ -14,24 +14,25 @@ public class InsuranceService {
 
     private final PersonRepository personRepository;
 
-    private final CheckerResponseProducer checkerResponseProducer;
-
-    @Value("${kafka.topic.patient.insurance.checker.response}")
-    private String insuranceResponseTopic;
+    private final PatientInsuranceCheckResponse patientInsuranceCheckResponse;
 
     @Autowired
     public InsuranceService(PersonRepository personRepository,
-                            CheckerResponseProducer checkerResponseProducer){
+                            PatientInsuranceCheckResponse patientInsuranceCheckResponse){
         this.personRepository = personRepository;
-        this.checkerResponseProducer = checkerResponseProducer;
+        this.patientInsuranceCheckResponse = patientInsuranceCheckResponse;
     }
+
+    /*
+     Check if the citizen is insured or not
+     */
     public void checkInsurance(InsuranceDetailsDTO insuranceDetails) {
 
-        boolean patientIsInsured = personRepository.isPersonEnsured(insuranceDetails.getSocialNumber());
+        Boolean patientIsInsured = personRepository.isPersonEnsured(insuranceDetails.getSocialNumber());
 
         ValidationResponseDTO response = ValidationResponseDTO
                 .builder()
-                .status(patientIsInsured)
+                .status(patientIsInsured != null)
                 .identifier(insuranceDetails.getIdentifier())
                 .build();
 
@@ -39,6 +40,6 @@ public class InsuranceService {
     }
 
     private void sendResponse(ValidationResponseDTO response) {
-        checkerResponseProducer.sendMessage(insuranceResponseTopic, new Gson().toJson(response));
+        patientInsuranceCheckResponse.sendMessage(new Gson().toJson(response));
     }
 }
