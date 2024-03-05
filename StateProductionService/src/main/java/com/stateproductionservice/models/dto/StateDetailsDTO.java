@@ -1,27 +1,17 @@
-package com.stateservice.models;
+package com.stateproductionservice.models.dto;
 
-import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Date;
-import java.util.UUID;
 
-@Entity
+@Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
-public class State {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
-    private UUID id;
-
-    @ManyToOne
-    private Patient patient;
+public class StateDetailsDTO {
 
     private Double temperature;
 
@@ -32,6 +22,4 @@ public class State {
     private Double glucose;
 
     private Date timestamp;
-
-    private boolean emergency;
 }

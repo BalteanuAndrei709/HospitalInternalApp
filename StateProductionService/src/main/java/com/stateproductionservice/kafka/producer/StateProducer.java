@@ -1,4 +1,4 @@
-package com.hospitalservice.kafka.producer;
+package com.stateproductionservice.kafka.producer;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,7 +11,7 @@ public class StateProducer {
     private final KafkaTemplate<Integer,String> kafkaTemplate;
 
     @Value("${kafka.topic.patient.state}")
-    private String topic;
+    private String responseTopic;
 
     @Autowired
     public StateProducer(KafkaTemplate<Integer, String> kafkaTemplate){
@@ -19,6 +19,6 @@ public class StateProducer {
     }
 
     public void sendMessage(String message){
-        kafkaTemplate.send(topic,message);
+        kafkaTemplate.send(responseTopic,message);
     }
 }
